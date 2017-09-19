@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -e
+
+# 檢查 env 是否存在
+function check_envs {
+  if [ -z $1 ]; then
+    echo "$2 is required."
+    exit 1
+  fi
+}
+
+# 將 string 依據 , 分割
+function cmd_options() {
+  options_string=""
+  IFS=,
+  options_array=($2)
+  for key in "${!options_array[@]}"; do options_string+="$1 ${options_array[$key]} "; done
+  echo $options_string
+}
+
+# 檢查必要的環境參數
+check_envs "$CI_SERVER_URL" "CI_SERVER_URL"
+check_envs "$REGISTRATION_TOKEN" "REGISTRATION_TOKEN"
+check_envs "$RUNNER_NAME" "RUNNER_NAME"
+check_envs "$DOCKER_IMAGE" "DOCKER_IMAGE"
+check_envs "$DOCKER_ALLOWED_IMAGES" "DOCKER_ALLOWED_IMAGES"
+check_envs "$DOCKER_ALLOWED_SERVICES" "DOCKER_ALLOWED_SERVICES"
+
+# 組成 gitlab runner register cmd
+cmd="gitlab-runner register"
+cmd="$cmd --non-interactive"
+cmd="$cmd --url $CI_SERVER_URL"
+cmd="$cmd --registration-token $REGISTRATION_TOKEN"
+cmd="$cmd --name $RUNNER_NAME"
+if [ -n "$RUNNER_TAG_LIST" ]; then
+  cmd="$cmd --tag-list $RUNNER_TAG_LIST"
+fi
+cmd="$cmd --executor docker"
+if [ -n "$RUNNER_ENV" ]; then
+  cmd="$cmd $(cmd_options --env $RUNNER_ENV)"
+fi
+cmd="$cmd --docker-image $DOCKER_IMAGE"
+cmd="$cmd --docker-volumes /var/run/docker.sock:/var/run/docker.sock"
+cmd="$cmd --docker-volumes /root/.docker:/root/.docker"
+cmd="$cmd $(cmd_options --docker-allowed-images $DOCKER_ALLOWED_IMAGES)"
+cmd="$cmd $(cmd_options --docker-allowed-services $DOCKER_ALLOWED_SERVICES)"
+
+# 執行 gitlab runner register
+$($cmd)
+
+# 啟動 gitlab runner
+/usr/bin/gitlab-runner "$@"
